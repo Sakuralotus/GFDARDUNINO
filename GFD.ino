@@ -19,24 +19,42 @@ void setup() {
 }
 
 void setup_wifi() {
-  delay(10);
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
+  delay(10); // 延迟 10 毫秒
+  Serial.println(); // 在串口监视器中打印空行
+  Serial.print("Scanning for networks..."); // 在串口监视器中打印信息
 
-  WiFi.begin(ssid, password); // 連接到 WiFi 網絡
-
-  while (WiFi.status() != WL_CONNECTED) { // 等待連接成功
-    delay(500);
-    Serial.print(".");
+  int n = WiFi.scanNetworks(); // 搜索可用的 Wi-Fi 网络
+  if (n == 0) { // 如果没有搜索到任何网络
+    Serial.println("No networks found"); // 在串口监视器中打印信息
+  } else { // 如果搜索到了网络
+    int strongestSignalIndex = -1; // 初始化最强信号的索引为 -1
+    int strongestSignalStrength = -1000; // 初始化最强信号的强度为 -1000
+    for (int i = 0; i < n; i++) { // 遍历所有搜索到的网络
+      if (WiFi.encryptionType(i) == ENC_TYPE_NONE && WiFi.RSSI(i) > strongestSignalStrength) { // 如果该网络无需密码且信号强度大于当前最强信号的强度
+        strongestSignalIndex = i; // 更新最强信号的索引
+        strongestSignalStrength = WiFi.RSSI(i); // 更新最强信号的强度
+      }
+    }
+    if (strongestSignalIndex == -1) { // 如果没有找到无需密码的网络
+      Serial.println("No open networks found"); // 在串口监视器中打印信息
+    } else { // 如果找到了无需密码的网络
+      String ssid = WiFi.SSID(strongestSignalIndex); // 获取该网络的 SSID
+      Serial.print("Connecting to "); // 在串口监视器中打印信息
+      Serial.println(ssid); // 在串口监视器中打印 SSID
+      WiFi.begin(ssid.c_str()); // 连接到该网络
+    }
   }
 
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP()); // 打印本地 IP 地址
-}
+  while (WiFi.status() != WL_CONNECTED) { // 等待连接成功
+    delay(1000); // 延迟 1 秒钟
+    Serial.println("Connecting to WiFi..."); // 在串口监视器中打印信息
+  }
 
+  Serial.println(""); // 在串口监视器中打印空行
+  Serial.println("WiFi connected"); // 在串口监视器中打印信息
+  Serial.println("IP address: "); // 在串口监视器中打印信息
+  Serial.println(WiFi.localIP()); // 在串口监视器中打印本地 IP 地址
+}
 void loop() {
   if (!client.connected()) { // 如果未連接到 MQTT 服務器，則重新連接
     reconnect();
