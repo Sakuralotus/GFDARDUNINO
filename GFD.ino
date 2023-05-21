@@ -1,19 +1,22 @@
 #include <ESP8266WiFi.h> // 引入 ESP8266WiFi 庫
 #include <PubSubClient.h> // 引入 PubSubClient 庫
+const int trigPin = 2;  //D4
+const int echoPin = 0;  //D3
+long duration, cm, inches;
 
-// 替換為您的網絡憑據
-const char* ssid = "your_SSID";
-const char* password = "your_PASSWORD";
 
 // 替換為您的 MQTT 代理的主機名和端口
-const char* mqtt_server = "broker.hivemq.com";
+const char* mqtt_server = "113.61.241.157";
 const int mqtt_port = 1883;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 void setup() {
-  Serial.begin(115200); // 初始化串口通信
+   Serial.begin (9600);             // 設定序列埠通訊頻率
+  pinMode(trigPin, OUTPUT);        // 定義輸入及輸出 
+  pinMode(echoPin, INPUT);
+ 
   setup_wifi(); // 設置 WiFi 連接
   client.setServer(mqtt_server, mqtt_port); // 設置 MQTT 服務器信息
 }
@@ -21,51 +24,71 @@ void setup() {
 void setup_wifi() {
   delay(10); // 延迟 10 毫秒
   Serial.println(); // 在串口监视器中打印空行
-  Serial.print("Scanning for networks..."); // 在串口监视器中打印信息
+  Serial.print("Scanning for networks..."); 
 
-  int n = WiFi.scanNetworks(); // 搜索可用的 Wi-Fi 网络
-  if (n == 0) { // 如果没有搜索到任何网络
-    Serial.println("No networks found"); // 在串口监视器中打印信息
-  } else { // 如果搜索到了网络
-    int strongestSignalIndex = -1; // 初始化最强信号的索引为 -1
-    int strongestSignalStrength = -1000; // 初始化最强信号的强度为 -1000
-    for (int i = 0; i < n; i++) { // 遍历所有搜索到的网络
-      if (WiFi.encryptionType(i) == ENC_TYPE_NONE && WiFi.RSSI(i) > strongestSignalStrength) { // 如果该网络无需密码且信号强度大于当前最强信号的强度
-        strongestSignalIndex = i; // 更新最强信号的索引
-        strongestSignalStrength = WiFi.RSSI(i); // 更新最强信号的强度
+  int n = WiFi.scanNetworks(); 
+  if (n == 0) { 
+    Serial.println("No networks found");
+  } else { // 
+    int strongestSignalIndex = -1; 
+    int strongestSignalStrength = -1000; 
+    for (int i = 0; i < n; i++) { 
+      if (WiFi.encryptionType(i) == ENC_TYPE_NONE && WiFi.RSSI(i) > strongestSignalStrength) { 
+        strongestSignalIndex = i; 
+        strongestSignalStrength = WiFi.RSSI(i); 
       }
     }
-    if (strongestSignalIndex == -1) { // 如果没有找到无需密码的网络
-      Serial.println("No open networks found"); // 在串口监视器中打印信息
-    } else { // 如果找到了无需密码的网络
-      String ssid = WiFi.SSID(strongestSignalIndex); // 获取该网络的 SSID
-      Serial.print("Connecting to "); // 在串口监视器中打印信息
-      Serial.println(ssid); // 在串口监视器中打印 SSID
-      WiFi.begin(ssid.c_str()); // 连接到该网络
+    if (strongestSignalIndex == -1) { 
+      Serial.println("No open networks found"); 
+    } else { 
+      String ssid = WiFi.SSID(strongestSignalIndex); 
+      Serial.print("Connecting to "); 
+      Serial.println(ssid); 
+      WiFi.begin(ssid.c_str()); 
     }
   }
 
-  while (WiFi.status() != WL_CONNECTED) { // 等待连接成功
-    delay(1000); // 延迟 1 秒钟
-    Serial.println("Connecting to WiFi..."); // 在串口监视器中打印信息
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000); 
+    Serial.println("Connecting to WiFi...");
   }
 
   Serial.println(""); // 在串口监视器中打印空行
-  Serial.println("WiFi connected"); // 在串口监视器中打印信息
-  Serial.println("IP address: "); // 在串口监视器中打印信息
-  Serial.println(WiFi.localIP()); // 在串口监视器中打印本地 IP 地址
+  Serial.println("WiFi connected"); 
+  Serial.println("IP address: "); 
+  Serial.println(WiFi.localIP()); 
 }
 void loop() {
   if (!client.connected()) { // 如果未連接到 MQTT 服務器，則重新連接
     reconnect();
   }
   client.loop(); // 處理 MQTT 消息
+  
 
   // 替換為您的傳感器讀取代碼
-  float sensorValue = analogRead(A0);
+  
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(5);
+  digitalWrite(trigPin, HIGH);     // 給 Trig 高電位，持續 10微秒
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  pinMode(echoPin, INPUT);             // 讀取 echo 的電位
+  duration = pulseIn(echoPin, HIGH);   // 收到高電位時的時間
+ 
+  cm = (duration/2) / 29.1;         // 將時間換算成距離 cm 或 inch  
+  inches = (duration/2) / 74; 
+
+ 
+  Serial.print(cm);
+  Serial.print("cm");
+  Serial.println();
+  
+  delay(250);
+  //int sensorValue = analogRead(cm);
 
   // 將傳感器值發布到 MQTT 主題
-  client.publish("your_topic", String(sensorValue).c_str());
+  client.publish("inTopic", String(cm).c_str());
 
   delay(1000); // 等待一秒鐘
 }
@@ -75,11 +98,11 @@ void reconnect() {
     Serial.print("Attempting MQTT connection...");
     if (client.connect("ESP8266Client")) { // 如果連接成功，則打印信息
       Serial.println("connected");
-    } else { // 如果連接失敗，則打印錯誤信息並等待五秒鐘再次嘗試
+    } else { // 如果連接失敗，則打印錯誤信息並等待1秒鐘再次嘗試
       Serial.print("failed, rc=");
       Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      delay(5000);
+      Serial.println(" try again in 1 seconds");
+      delay(1000);
     }
   }
 }
